@@ -26,7 +26,7 @@ namespace Pikol93.NavigationMesh
 
         internal NavMesh GenerateNavMesh()
         {
-            List<Polygon> polygons = new List<Polygon>();
+            List<Polygon> polygons = new List<Polygon>(Cells.Count);
 
             foreach (int[] cell in Cells)
             {
@@ -56,6 +56,12 @@ namespace Pikol93.NavigationMesh
             if (polygons.Count < 1)
                 throw new ApplicationException("Not enough polygons created.");
 
+            Vector2[] vertices = new Vector2[Vertices.Count];
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                vertices[i] = Vertices[i].Position;
+            }
+
             foreach (Polygon polygon in polygons)
             {
                 // Find connected polygons
@@ -71,7 +77,7 @@ namespace Pikol93.NavigationMesh
                     }
                 }
 
-                polygon.SetNeighbours(neighbours);
+                polygon.SetNeighbours(vertices, neighbours);
             }
 
             Vector2[] verticesArray = new Vector2[Vertices.Count];
@@ -495,9 +501,6 @@ namespace Pikol93.NavigationMesh
         {
             public Portal(int item1, int item2)
                 : base(item1, item2) { }
-
-            public override string ToString() =>
-                $"[Portal {Item1}, {Item2}]";
 
             public bool ContainsIndex(int index) =>
                 Item1 == index || Item2 == index;

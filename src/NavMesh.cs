@@ -7,8 +7,8 @@ namespace Pikol93.NavigationMesh
 {
     public class NavMesh
     {
-        private Vector2[] Vertices { get; }
-        private Polygon[] Polygons { get; }
+        public Vector2[] Vertices { get; }
+        public Polygon[] Polygons { get; }
 
         internal NavMesh(Vector2[] vertices, Polygon[] polygons)
         {
@@ -35,10 +35,8 @@ namespace Pikol93.NavigationMesh
 
             foreach (PolygonNeighbour neighbour in startPolygon.Neighbours)
             {
-                Vector2 point = MathExtensions.GetClosestPointOnLine(start,
-                    Vertices[neighbour.Portal.Item1], Vertices[neighbour.Portal.Item2], true);
-                var node = new PortalNode(neighbour.Portal, neighbour.Polygon, (end - point).Length());
-                node.Update(null, point, (point - start).Length());
+                var node = new PortalNode(neighbour.Portal, neighbour.Polygon, (end - neighbour.PortalCenter).Length());
+                node.Update(null, neighbour.PortalCenter, (neighbour.PortalCenter - start).Length());
                 open.Add(node);
             }
 
@@ -76,26 +74,22 @@ namespace Pikol93.NavigationMesh
                         continue;
                     }
 
-                    Vector2 point = MathExtensions.GetClosestPointOnLine(node.Point,
-                        Vertices[newNeighbour.Portal.Item1], Vertices[newNeighbour.Portal.Item2], true);
-
                     // If the node already exists in the open set, then there might be a better route to it
                     PortalNode processedNode = open.Find(x => newNeighbour.IsTheSamePortal(x.Portal));
                     if (processedNode == null)
                     {
-                        processedNode = new PortalNode(newNeighbour.Portal, newNeighbour.Polygon, (end - point).Length());
+                        processedNode = new PortalNode(newNeighbour.Portal, newNeighbour.Polygon, (end - newNeighbour.PortalCenter).Length());
                         open.Add(processedNode);
                     }
 
-                    float newGScore = node.GScore + (point - node.Point).Length();
+                    float newGScore = node.GScore + (newNeighbour.PortalCenter - node.Point).Length();
                     if (newGScore < processedNode.GScore)
                     {
-                        processedNode.Update(node, point, newGScore);
+                        processedNode.Update(node, newNeighbour.PortalCenter, newGScore);
                     }
                 }
             }
 
-            // Console.WriteLine("Path not found.");
             return new List<Vector2>() { start };
         }
 

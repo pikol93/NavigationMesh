@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -6,13 +5,13 @@ using PortalInt = System.Tuple<int, int>;
 
 namespace Pikol93.NavigationMesh
 {
-    internal class Polygon
+    public class Polygon
     {
-        internal int[] Vertices { get; }
-        internal Vector2 Center { get; }
-        internal float PolygonRadiusSqr { get; }
+        public int[] Vertices { get; }
+        public Vector2 Center { get; }
+        public float PolygonRadiusSqr { get; }
 
-        internal PolygonNeighbour[] Neighbours { get; private set; }
+        public PolygonNeighbour[] Neighbours { get; private set; }
 
         public Polygon(int[] vertices, Vector2 center, float polygonRadiusSqr)
         {
@@ -21,13 +20,17 @@ namespace Pikol93.NavigationMesh
             PolygonRadiusSqr = polygonRadiusSqr;
         }
 
-        public void SetNeighbours(List<Polygon> neighbours)
+        public void SetNeighbours(Vector2[] vertices, List<Polygon> neighbours)
         {
             Neighbours = new PolygonNeighbour[neighbours.Count];
             for (int i = 0; i < neighbours.Count; i++)
             {
                 PortalInt portal = GetConnectingPortal(neighbours[i]);
-                Neighbours[i] = new PolygonNeighbour(neighbours[i], portal);
+
+                // Get center of portal
+                Vector2 portalCenter = (vertices[portal.Item1] + vertices[portal.Item2]) / 2f;
+
+                Neighbours[i] = new PolygonNeighbour(neighbours[i], portal, portalCenter);
             }
         }
 
@@ -78,7 +81,7 @@ namespace Pikol93.NavigationMesh
             // commonVertices is a IEnumerable with at least two elements
             // it's quaranteed by the process that's responsible for selecting neighbours
             if (commonVertices.Count() != 2)
-                throw new ApplicationException("Invalid `commonVertices` length.");
+                throw new System.ApplicationException("Invalid `commonVertices` length.");
 #endif
 
             // Portals have their indexes ordered clockwise, so in case 

@@ -16,6 +16,25 @@ namespace Pikol93.NavigationMesh
             Polygons = polygons;
         }
 
+        /// <summary>
+        /// Finds the nearest point that is located in the NavMesh.
+        /// </summary>
+        /// <param name="point">The tested point.</param>
+        /// <returns>A point inside the NavMesh.</returns>
+        public Vector2 FindNearestPoint(Vector2 point)
+        {
+            Polygon nearestPolygon = FindNearestPolygon(point);
+            return nearestPolygon.FindNearestPoint(Vertices, point);
+        }
+
+        /// <summary>
+        /// Tries to find the shortest path from start point to end point.
+        /// </summary>
+        /// <param name="start">Point where the path begins.</param>
+        /// <param name="end">Point where the path should lead to.</param>
+        /// <param name="limitToNavMesh">Decides whether the path should end in the NavMesh or not if the end point is located outside the NavMesh.</param>
+        /// <returns>A List of Vector2s which contain the shortest path. Both start point and end point are included in the list.
+        /// If the path was not found, the method returns a list with only the start point element.</returns>
         public List<Vector2> FindPath(Vector2 start, Vector2 end, bool limitToNavMesh = false)
         {
             Polygon startPolygon = FindNearestPolygon(start);
@@ -93,6 +112,11 @@ namespace Pikol93.NavigationMesh
             return new List<Vector2>() { start };
         }
 
+        /// <summary>
+        /// Iterates through the Portals created by the navigation algorithm and processes it to get the array of portals the path needs to go through.
+        /// </summary>
+        /// <param name="node">The last portal the path needs to go through.</param>
+        /// <returns>An array of Tuple<Vector2, Vector2> that the path needs to go through.</returns>
         private List<Portal> RestructurePath(PortalNode node)
         {
             List<PortalNode> nodes = new List<PortalNode>();
@@ -111,11 +135,15 @@ namespace Pikol93.NavigationMesh
             return output;
         }
 
+        /// <summary>
+        /// Finds the polygon that contains the given point.
+        /// </summary>
+        /// <param name="point">The point to test.</param>
+        /// <returns>The polygon that contains the given point.</returns>
         private Polygon FindPolygon(Vector2 point)
         {
             foreach (Polygon polygon in Polygons)
             {
-                // If there's a point inside then don't iterate further
                 if (polygon.IsPointInside(Vertices, point))
                     return polygon;
             }
@@ -123,6 +151,11 @@ namespace Pikol93.NavigationMesh
             return null;
         }
 
+        /// <summary>
+        /// Finds the nearest polygon to said point even in case when the point is not included in the NavMesh.
+        /// </summary>
+        /// <param name="point">The point to test.</param>
+        /// <returns>The nearest polygon.</returns>
         private Polygon FindNearestPolygon(Vector2 point)
         {
             Polygon findPolygonResult = FindPolygon(point);
@@ -148,7 +181,13 @@ namespace Pikol93.NavigationMesh
             return result;
         }
 
-        public static List<Vector2> StringPulling(Vector2 start, Vector2 end, List<Portal> portals)
+        /// <summary>
+        /// String pulls the start point -> end point through the given portals.
+        /// This is an implementation of Simple Stupid Funnel Algorithm 
+        /// </summary>
+        /// <param name="portals">Portals the string needs to go through.</param>
+        /// <returns>A string pulled list of Vector2s</returns>
+        private static List<Vector2> StringPulling(Vector2 start, Vector2 end, List<Portal> portals)
         {
             // Portals are constructed so that Item1 of Tuple<Vector2, Vector2>
             // is the "left" edge of the portal, and Item2 is the "right" edge

@@ -147,7 +147,16 @@ namespace Pikol93.NavigationMesh
             }
 
             if (Cells.Count == 0)
-                throw new ApplicationException("No pathfinding cells could be found.");
+            {
+                // No pathfinding cells. Create only a single cell that spans across the whole bounds
+                int[] cell = new int[Vertices.Count];
+                for (int i = 0; i < cell.Length; i++)
+                {
+                    cell[i] = i;
+                }
+
+                Cells.Add(cell);
+            }
         }
 
         private void ProcessNotch(Vertex notch)

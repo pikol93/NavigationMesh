@@ -1,6 +1,9 @@
 # NavigationMesh
 A C# navigation library allowing for fast navigation in 2D space.
 
+![Benchmarked Data Screenshot](./doc/BenchmarkData.png)
+![Example Mesh](./doc/Showcase1.png)
+
 Features
 --------------------
 - Navigation based on run-time generated mesh.
@@ -18,7 +21,7 @@ The usage is located in the [NavigationMeshShowcase](https://github.com/pikol93/
 Performance
 --------------------
 Notes regarding the benchmark:
-- The benchmark was executed with a dataset that is available in JSON format [here](./doc/BenchmarkData.json). The graphical representation of the generated mesh and path can be found [here](./docs/BenchmarkData.png).
+- The benchmark was executed with a dataset that is available in JSON format [here](./doc/BenchmarkData.json). The graphical representation of the generated mesh and path can be found [here](./doc/BenchmarkData.png).
 - There has been no conversion between any external type and `System.Numerics.Vector2`. This should be taken into consideration when applicating to a real project.
 ```
 BenchmarkDotNet=v0.12.1, OS=Windows 10.0.19041.804 (2004/?/20H1)

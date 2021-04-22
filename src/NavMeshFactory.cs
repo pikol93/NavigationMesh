@@ -16,11 +16,15 @@ namespace Pikol93.NavigationMesh
         {
             // Bounds need to form a polygon
             if (bounds == null || bounds.Length < 3)
+            {
                 throw new ArgumentException("Bounds need to form a polygon.");
+            }
 
             // agentSize less than 1.0 leads to undefined behaviour due to polygon inflation
             if (Math.Round(agentSize) < 1.0)
+            {
                 throw new ArgumentException("Agent size has to be greater than 1.0.");
+            }
 
             Vector2[][] inflatedPolygons = PolygonInflation.InflatePolygons(bounds, shapes, agentSize);
 
@@ -64,6 +68,15 @@ namespace Pikol93.NavigationMesh
                         maxY = vertex.Y;
                     }
                 }
+            }
+            if (minX == float.PositiveInfinity)
+            {
+                // If one of them was not set then all the others
+                // were not set as well
+                minX = 0f;
+                maxX = 0f;
+                minY = 0f;
+                maxY = 0f;
             }
 
             Vector2[] bounds = new Vector2[]

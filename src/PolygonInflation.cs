@@ -17,7 +17,9 @@ namespace Pikol93.NavigationMesh
 
             List<Path> solution = new List<Path>();
             if (!clipper.Execute(ClipType.ctDifference, solution, PolyFillType.pftNonZero))
+            {
                 throw new ApplicationException("Could not limit passed shapes to bounds.");
+            }
 
             // Inflate the polygons with the given agentSize
             ClipperOffset clipperOffset = new ClipperOffset();
@@ -44,7 +46,7 @@ namespace Pikol93.NavigationMesh
             {
                 result[i] = new Vector2(shape[i].X, shape[i].Y);
             }
-            
+
             return result;
         }
 

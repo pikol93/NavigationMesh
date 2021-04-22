@@ -3,32 +3,27 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
+using Portal = System.Tuple<int, int>;
+
 namespace Pikol93.NavigationMesh
 {
     internal class NavigationMeshGenerator
     {
-        private List<Vertex> Vertices { get; }
-        private List<IIntTuple> Edges { get; }
-        private List<IIntTuple> Portals { get; }
-        private List<int[]> Cells { get; }
+        private List<Vector2> vertices = new List<Vector2>();
+        private List<Point> points = new List<Point>();
+        private List<Edge> edges = new List<Edge>();
+        private List<Portal> portals = new List<Portal>();
+        private List<int[]> cells = new List<int[]>();
 
-        internal NavigationMeshGenerator(IEnumerable<Vector2[]> shapes)
+        internal NavMesh GenerateNavMesh(IEnumerable<Vector2[]> shapes)
         {
-            Vertices = new List<Vertex>();
-            Edges = new List<IIntTuple>();
-            Portals = new List<IIntTuple>();
-            Cells = new List<int[]>();
-
             InitializeShapes(shapes);
             ProcessNotches();
             CreateCells();
-        }
 
-        internal NavMesh GenerateNavMesh()
-        {
-            List<Polygon> polygons = new List<Polygon>(Cells.Count);
+            List<Polygon> polygons = new List<Polygon>(cells.Count);
 
-            foreach (int[] cell in Cells)
+            foreach (int[] cell in cells)
             {
 #if DEBUG
                 if (cell.Length < 3)
@@ -42,7 +37,7 @@ namespace Pikol93.NavigationMesh
                 Vector2[] polygonVertices = new Vector2[cell.Length];
                 for (int i = 0; i < polygonVertices.Length; i++)
                 {
-                    polygonVertices[i] = Vertices[cell[i]].Position;
+                    polygonVertices[i] = vertices[cell[i]];
                 }
                 Vector2 polygonCenter = polygonVertices.GetPolygonCentroid();
 
@@ -66,11 +61,7 @@ namespace Pikol93.NavigationMesh
                 throw new ApplicationException("Not enough polygons created.");
             }
 
-            Vector2[] vertices = new Vector2[Vertices.Count];
-            for (int i = 0; i < vertices.Length; i++)
-            {
-                vertices[i] = Vertices[i].Position;
-            }
+            Vector2[] verticesArray = vertices.ToArray();
 
             foreach (Polygon polygon in polygons)
             {
@@ -79,7 +70,9 @@ namespace Pikol93.NavigationMesh
                 foreach (Polygon neighbour in polygons)
                 {
                     if (polygon == neighbour)
+                    {
                         continue;
+                    }
 
                     if (polygon.Vertices.HasAmountOfCommonElements(neighbour.Vertices, 2))
                     {
@@ -87,13 +80,7 @@ namespace Pikol93.NavigationMesh
                     }
                 }
 
-                polygon.SetNeighbours(vertices, neighbours);
-            }
-
-            Vector2[] verticesArray = new Vector2[Vertices.Count];
-            for (int i = 0; i < verticesArray.Length; i++)
-            {
-                verticesArray[i] = Vertices[i].Position;
+                polygon.SetNeighbours(verticesArray, neighbours);
             }
 
             return new NavMesh(verticesArray, polygons.ToArray());
@@ -108,17 +95,19 @@ namespace Pikol93.NavigationMesh
             // Fill Vertices with data from shapes
             foreach (Vector2[] shape in shapes)
             {
-                int shapeIndex = Vertices.Count;
+                int shapeIndex = points.Count;
                 for (int i = 0; i < shape.Length; i++)
                 {
-                    Vertex vertex = new Vertex(shape[i], Vertices.Count)
+                    vertices.Add(shape[i]);
+
+                    Point vertex = new Point(points.Count)
                     {
                         PreviousIndex = shapeIndex + (shape.Length + i - 1) % shape.Length,
                         NextIndex = shapeIndex + (i + 1) % shape.Length
                     };
-                    Vertices.Add(vertex);
+                    points.Add(vertex);
 
-                    Edges.Add(new Edge(vertex.Index, vertex.NextIndex));
+                    edges.Add(new Edge(vertex.Index, vertex.NextIndex));
                 }
             }
         }
@@ -128,75 +117,75 @@ namespace Pikol93.NavigationMesh
         /// </summary>
         private void ProcessNotches()
         {
-            Queue<int> notches = new Queue<int>();
-            foreach (Vertex vertex in Vertices)
+            // The points list is modified during this loop, hence no foreach
+            int maxIndex = points.Count;
+            for (int i = 0; i < maxIndex; i++)
             {
                 // TODO: Add convexity relaxation
-                if (IsVertexConcave(vertex))
-                    notches.Enqueue(vertex.Index);
-            }
-
-            while (notches.Count > 0)
-            {
-                Vertex notch = Vertices[notches.Dequeue()];
-                if (notch.Processed)
+                if (points[i].Processed || !IsVertexConcave(points[i]))
+                {
                     continue;
+                }
 
-                ProcessNotch(notch);
+                ProcessNotch(points[i]);
             }
-            notches.Clear();
+
         }
 
         private void CreateCells()
         {
             // Assuming that there's at least one portal in the geometry
-            foreach (Portal portal in Portals)
+            foreach (Portal portal in portals)
             {
                 // Create cells on both sides of the portal
-                Vertex a = Vertices[portal.Item1];
-                Vertex b = Vertices[portal.Item2];
+                Point a = points[portal.Item1];
+                Point b = points[portal.Item2];
                 int[] cellA = GenerateCell(a, b);
                 if (cellA != null)
                 {
-                    Cells.Add(cellA);
+                    cells.Add(cellA);
                 }
 
                 int[] cellB = GenerateCell(b, a);
                 if (cellB != null)
                 {
-                    Cells.Add(cellB);
+                    cells.Add(cellB);
                 }
             }
 
-            if (Cells.Count == 0)
+            if (cells.Count == 0)
             {
                 // No pathfinding cells. Create only a single cell that spans across the whole bounds
-                int[] cell = new int[Vertices.Count];
+                int[] cell = new int[points.Count];
                 for (int i = 0; i < cell.Length; i++)
                 {
                     cell[i] = i;
                 }
 
-                Cells.Add(cell);
+                cells.Add(cell);
             }
         }
 
-        private void ProcessNotch(Vertex notch)
+        private void ProcessNotch(Point notch)
         {
             // TODO: Clean this up, this is trash
             float minDistance = float.PositiveInfinity;
             object target = null;
             Vector2 position = Vector2.Zero;
 
-            foreach (Vertex vertex in Vertices)
+            foreach (Point vertex in points)
             {
                 if (vertex.Equals(notch))
+                {
                     continue;
+                }
 
-                if (!IsPointInIA(notch, vertex.Position))
+                if (!IsPointInIA(notch, vertices[vertex.Index]))
+                {
                     continue;
+                }
 
-                float distance = notch.GetDistanceSquared(vertex.Position);
+                float distance = Vector2.DistanceSquared(vertices[notch.Index], vertices[vertex.Index]);
 
                 if (distance < minDistance)
                 {
@@ -205,16 +194,20 @@ namespace Pikol93.NavigationMesh
                 }
             }
 
-            foreach (Edge edge in Edges)
+            foreach (Edge edge in edges)
             {
                 // Don't process edges where the notch is a point in it
                 if (edge.ContainsIndex(notch.Index))
+                {
                     continue;
+                }
 
                 if (!IsEdgeInIA(notch, edge, out Vector2 result))
+                {
                     continue;
+                }
 
-                float distance = notch.GetDistanceSquared(result);
+                float distance = Vector2.DistanceSquared(vertices[notch.Index], result);
 
                 if (distance < minDistance)
                 {
@@ -224,17 +217,21 @@ namespace Pikol93.NavigationMesh
                 }
             }
 
-            foreach (Portal portal in Portals)
+            foreach (Portal portal in portals)
             {
                 // A Portal can have an index of vertex that still needs to be processed
                 // Refer to 3.2.1 Vertex-Vertex Portals for more information
-                if (portal.ContainsIndex(notch.Index))
+                if (portal.Item1 == notch.Index || portal.Item2 == notch.Index)
+                {
                     continue;
+                }
 
                 if (!IsPortalInIA(notch, portal, out Vector2 intersection))
+                {
                     continue;
+                }
 
-                float distance = notch.GetDistanceSquared(intersection);
+                float distance = Vector2.DistanceSquared(vertices[notch.Index], intersection);
 
                 if (distance < minDistance)
                 {
@@ -243,88 +240,90 @@ namespace Pikol93.NavigationMesh
                 }
             }
 
-            if (target is Vertex targetVertex)
+            if (target is Point targetVertex)
             {
                 // If both points are in both IAs then 
                 // there's no need to process them twice
-                if (IsPointInIA(targetVertex, notch.Position))
+                if (IsPointInIA(targetVertex, vertices[notch.Index]))
+                {
                     targetVertex.Processed = true;
+                }
 
                 // Add new portal connecting to the vertex
                 Portal portal = new Portal(notch.Index, targetVertex.Index);
-                Portals.Add(portal);
+                portals.Add(portal);
             }
             else if (target is Edge targetEdge)
             {
                 // A new vertex representing the point on the edge is created
-                int edgeVertexIndex = Vertices.Count;
-                Vertex edgeVertex = new Vertex(position, edgeVertexIndex)
+                int edgeVertexIndex = points.Count;
+                vertices.Add(position);
+                Point edgeVertex = new Point(edgeVertexIndex)
                 {
                     PreviousIndex = targetEdge.Item1,
                     NextIndex = targetEdge.Item2
                 };
-                Vertices.Add(edgeVertex);
+                points.Add(edgeVertex);
 
                 // Update the vertexIndexes on previous and next vertices and on edges
-                Vertices[targetEdge.Item1].NextIndex = edgeVertexIndex;
-                Vertices[targetEdge.Item2].PreviousIndex = edgeVertexIndex;
+                points[targetEdge.Item1].NextIndex = edgeVertexIndex;
+                points[targetEdge.Item2].PreviousIndex = edgeVertexIndex;
 
                 // Create new edge and add it to the list
                 Edge newEdge = new Edge(edgeVertexIndex, targetEdge.Item2);
-                Edges.Add(newEdge);
+                edges.Add(newEdge);
 
                 targetEdge.Item2 = edgeVertexIndex;
 
                 // Add new portal connecting to the point on the edge
                 Portal portal = new Portal(notch.Index, edgeVertexIndex);
-                Portals.Add(portal);
+                portals.Add(portal);
             }
             else if (target is Portal targetPortal)
             {
-                if (!IsPointInIA(notch, Vertices[targetPortal.Item2].Position))
+                if (!IsPointInIA(notch, vertices[targetPortal.Item2]))
                 {
                     // Create new portal with first vertex
                     Portal newPortal = new Portal(notch.Index, targetPortal.Item1);
-                    Portals.Add(newPortal);
+                    portals.Add(newPortal);
                 }
-                if (!IsPointInIA(notch, Vertices[targetPortal.Item1].Position))
+
+                if (!IsPointInIA(notch, vertices[targetPortal.Item1]))
                 {
                     // Create portal with second vertex
                     Portal newPortal = new Portal(notch.Index, targetPortal.Item2);
-                    Portals.Add(newPortal);
+                    portals.Add(newPortal);
                 }
             }
+#if DEBUG
             else
             {
                 // This happens when no object can be found within notch's IA
-                // Usually this means that shape is out of bounds
-#if DEBUG
                 throw new ApplicationException("Invalid shape.");
-#endif
             }
+#endif
         }
 
-        private bool IsPointInIA(Vertex iaVertex, Vector2 point)
+        private bool IsPointInIA(Point iaPoint, Vector2 point)
         {
-            Vector2 prev = Vertices[iaVertex.PreviousIndex].Position;
-            Vector2 next = Vertices[iaVertex.NextIndex].Position;
+            Vector2 vertex = vertices[iaPoint.Index];
 
             // Instead of doing IsToLeftOfLine(a, b), I have to do !IsToRightOfLine(a, b)
             // because sometimes the points are placed exactly on the line in question
-            return !point.IsToRightOfLine(prev, iaVertex.Position) &&
-                !point.IsToLeftOfLine(next, iaVertex.Position);
+            return !point.IsToRightOfLine(vertices[iaPoint.PreviousIndex], vertex) &&
+                !point.IsToLeftOfLine(vertices[iaPoint.NextIndex], vertex);
         }
 
-        private bool IsEdgeInIA(Vertex iaVertex, Edge edge, out Vector2 result)
+        private bool IsEdgeInIA(Point iaPoint, Edge edge, out Vector2 result)
         {
-            Vector2 pointA = Vertices[edge.Item1].Position;
-            Vector2 pointB = Vertices[edge.Item2].Position;
+            Vector2 pointA = vertices[edge.Item1];
+            Vector2 pointB = vertices[edge.Item2];
 
             // Check if candidate q is within IA
-            Vector2 projectedPoint = iaVertex.Position.GetClosestPointOnLine(pointA, pointB, true);
+            Vector2 projectedPoint = vertices[iaPoint.Index].GetClosestPointOnLine(pointA, pointB, true);
 
             // Damn, float precision errors make this algorithm slower than it can be
-            if (IsPointInIA(iaVertex, projectedPoint))
+            if (IsPointInIA(iaPoint, projectedPoint))
             {
                 result = projectedPoint;
                 return true;
@@ -335,16 +334,16 @@ namespace Pikol93.NavigationMesh
             result = MathExtensions.Vector2Inf;
             Vector2[] vertexPositions = new Vector2[]
             {
-                Vertices[iaVertex.PreviousIndex].Position,
-                Vertices[iaVertex.NextIndex].Position
+                vertices[iaPoint.PreviousIndex],
+                vertices[iaPoint.NextIndex]
             };
 
             foreach (Vector2 item in vertexPositions)
             {
                 // Can't use IsPointInIA here due to float precision errors
-                if (MathExtensions.CastRay(item, iaVertex.Position, pointA, pointB, out Vector2 intersection))
+                if (MathExtensions.CastRay(item, vertices[iaPoint.Index], pointA, pointB, out Vector2 intersection))
                 {
-                    float distance = iaVertex.GetDistanceSquared(intersection);
+                    float distance = Vector2.DistanceSquared(vertices[iaPoint.Index], intersection);
                     if (distance < minDistance)
                     {
                         minDistance = distance;
@@ -357,25 +356,24 @@ namespace Pikol93.NavigationMesh
             return result != MathExtensions.Vector2Inf;
         }
 
-        private bool IsPortalInIA(Vertex iaVertex, Portal portal, out Vector2 intersection)
+        private bool IsPortalInIA(Point iaPoint, Portal portal, out Vector2 intersection)
         {
-            Vector2 prev = Vertices[iaVertex.PreviousIndex].Position;
-            Vector2 next = Vertices[iaVertex.NextIndex].Position;
-            Vector2 portalPoint1 = Vertices[portal.Item1].Position;
-            Vector2 portalPoint2 = Vertices[portal.Item2].Position;
+            Vector2 vertex = vertices[iaPoint.Index];
+            Vector2 portalPoint1 = vertices[portal.Item1];
+            Vector2 portalPoint2 = vertices[portal.Item2];
 
             intersection = MathExtensions.Vector2Inf;
 
             // Find if portal lies within IA
             float distanceA = float.PositiveInfinity;
-            if (MathExtensions.CastRay(prev, iaVertex.Position, portalPoint1, portalPoint2, out Vector2 intersectionA))
+            if (MathExtensions.CastRay(vertices[iaPoint.PreviousIndex], vertex, portalPoint1, portalPoint2, out Vector2 intersectionA))
             {
-                distanceA = iaVertex.GetDistanceSquared(intersectionA);
+                distanceA = Vector2.DistanceSquared(vertex, intersectionA);
                 intersection = intersectionA;
             }
-            if (MathExtensions.CastRay(next, iaVertex.Position, portalPoint1, portalPoint2, out Vector2 intersectionB))
+            if (MathExtensions.CastRay(vertices[iaPoint.NextIndex], vertex, portalPoint1, portalPoint2, out Vector2 intersectionB))
             {
-                if (iaVertex.GetDistanceSquared(intersectionB) < distanceA)
+                if (Vector2.DistanceSquared(vertex, intersectionB) < distanceA)
                 {
                     intersection = intersectionB;
                 }
@@ -384,12 +382,12 @@ namespace Pikol93.NavigationMesh
             return intersection != MathExtensions.Vector2Inf;
         }
 
-        private bool IsVertexConcave(Vertex vertex) =>
-            Vertices[vertex.NextIndex].Position.IsToRightOfLine(Vertices[vertex.PreviousIndex].Position, vertex.Position);
+        private bool IsVertexConcave(Point point) =>
+            vertices[point.NextIndex].IsToRightOfLine(vertices[point.PreviousIndex], vertices[point.Index]);
 
-        private int[] GenerateCell(Vertex first, Vertex second)
+        private int[] GenerateCell(Point first, Point second)
         {
-            List<Vertex> path = new List<Vertex>() { first, second };
+            List<Point> path = new List<Point>() { first, second };
 
             while (true)
             {
@@ -397,7 +395,7 @@ namespace Pikol93.NavigationMesh
                 {
                     // No two cells should have the same 3 indexes in them
                     // There probably is a better place to put this code...
-                    foreach (int[] item in Cells)
+                    foreach (int[] item in cells)
                     {
                         if (item.Contains(path[0].Index) && item.Contains(path[1].Index) && item.Contains(path[2].Index))
                         {
@@ -407,10 +405,10 @@ namespace Pikol93.NavigationMesh
                 }
 
                 // Find connected vertices to the last point of path
-                IEnumerable<Vertex> connectedPoints = GetConnectedVertices(path[path.Count - 1]);
+                IEnumerable<Point> connectedPoints = GetConnectedVertices(path[path.Count - 1]);
 
-                Vertex bestCandidate = null;
-                foreach (Vertex point in connectedPoints)
+                Point bestCandidate = null;
+                foreach (Point point in connectedPoints)
                 {
                     // Check if path is found
                     if (point == first && point != path[path.Count - 2])
@@ -435,13 +433,15 @@ namespace Pikol93.NavigationMesh
                         continue;
                     }
 
+                    Vector2 lastIteratedVertex = vertices[path[path.Count - 2].Index];
+                    Vector2 vertex = vertices[point.Index];
                     // Don't ever accept points that could result in a concave shape
-                    if (point.Position.IsToLeftOfLine(path[path.Count - 2].Position, path[path.Count - 1].Position))
+                    if (vertex.IsToLeftOfLine(lastIteratedVertex, vertices[path[path.Count - 1].Index]))
                     {
                         continue;
                     }
 
-                    if (bestCandidate == null || point.Position.IsToRightOfLine(path[path.Count - 2].Position, bestCandidate.Position))
+                    if (bestCandidate == null || vertex.IsToRightOfLine(lastIteratedVertex, vertices[bestCandidate.Index]))
                     {
                         // New best candidate
                         bestCandidate = point;
@@ -460,32 +460,32 @@ namespace Pikol93.NavigationMesh
             return null;
         }
 
-        private IEnumerable<Vertex> GetConnectedVertices(Vertex vertex)
+        private IEnumerable<Point> GetConnectedVertices(Point vertex)
         {
             int index = vertex.Index;
 
             // Get edge connected vertices
-            yield return Vertices[vertex.PreviousIndex];
-            yield return Vertices[vertex.NextIndex];
+            yield return points[vertex.PreviousIndex];
+            yield return points[vertex.NextIndex];
 
             // Get portal connected vertices
-            foreach (Portal portal in Portals)
+            foreach (Portal portal in portals)
             {
                 if (portal.Item1 == index)
                 {
-                    yield return Vertices[portal.Item2];
+                    yield return points[portal.Item2];
                     continue;
                 }
 
                 if (portal.Item2 == index)
                 {
-                    yield return Vertices[portal.Item1];
+                    yield return points[portal.Item1];
                     continue;
                 }
             }
         }
 
-        private int[] VertexPathToCell(List<Vertex> path)
+        private int[] VertexPathToCell(List<Point> path)
         {
             int[] cell = new int[path.Count];
             for (int i = 0; i < cell.Length; i++)
@@ -496,25 +496,20 @@ namespace Pikol93.NavigationMesh
             return cell;
         }
 
-        internal class Vertex
+        private class Point
         {
-            public Vector2 Position { get; }
             public int Index { get; }
             public int PreviousIndex { get; set; }
             public int NextIndex { get; set; }
             public bool Processed { get; set; }
 
-            public Vertex(Vector2 position, int index)
+            public Point(int index)
             {
-                Position = position;
                 Index = index;
             }
-
-            public float GetDistanceSquared(Vector2 target) =>
-                Vector2.DistanceSquared(Position, target);
         }
 
-        internal class Edge : IIntTuple
+        private class Edge
         {
             // These properties have to be mutable
             // so I can't use Tuple<int, int> here
@@ -529,23 +524,6 @@ namespace Pikol93.NavigationMesh
 
             public bool ContainsIndex(int index) =>
                 Item1 == index || Item2 == index;
-        }
-
-        internal class Portal : Tuple<int, int>, IIntTuple
-        {
-            public Portal(int item1, int item2)
-                : base(item1, item2) { }
-
-            public bool ContainsIndex(int index) =>
-                Item1 == index || Item2 == index;
-        }
-
-        internal interface IIntTuple
-        {
-            int Item1 { get; }
-            int Item2 { get; }
-
-            bool ContainsIndex(int index);
         }
     }
 }

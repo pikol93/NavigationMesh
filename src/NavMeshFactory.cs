@@ -1,14 +1,10 @@
 using System;
-using System.Collections.Generic;
 using System.Numerics;
 
 namespace Pikol93.NavigationMesh
 {
     public static class NavMeshFactory
     {
-        // public static List<Vector2[]> portals;
-        // public static List<Vector2[]> edges;
-
         /// <summary>
         /// Tries to create a new NavMesh.
         /// </summary>
@@ -28,23 +24,57 @@ namespace Pikol93.NavigationMesh
 
             Vector2[][] inflatedPolygons = PolygonInflation.InflatePolygons(bounds, shapes, agentSize);
 
-            NavigationMeshGenerator generator = new NavigationMeshGenerator(inflatedPolygons);
+            NavigationMeshGenerator generator = new NavigationMeshGenerator();
 
-            var result = generator.GenerateNavMesh();
+            return generator.GenerateNavMesh(inflatedPolygons);
+        }
 
-            // portals = new List<Vector2[]>();
-            // foreach (NavigationMeshGenerator.IIntTuple tuple in generator.Portals)
-            // {
-            //     portals.Add(new Vector2[] { generator.Vertices[tuple.Item1].Position, generator.Vertices[tuple.Item2].Position } );
-            // }
+        /// <summary>
+        /// Sets the bounds of the NavMesh to be a rectangle which contains all the shapes
+        /// </summary>
+        /// <param name="shapes">The shapes that agents need to avoid.</param>
+        /// <param name="agentSize">Size of the agent.</param>
+        /// <param name="padding">Padding of the NavMesh bounds.</param>
+        /// <returns></returns>
+        public static NavMesh CreateWithPadding(Vector2[][] shapes, double agentSize, float padding)
+        {
+            float minX = float.PositiveInfinity;
+            float maxX = float.NegativeInfinity;
+            float minY = float.PositiveInfinity;
+            float maxY = float.NegativeInfinity;
 
-            // edges = new List<Vector2[]>();
-            // foreach (NavigationMeshGenerator.IIntTuple tuple in generator.Edges)
-            // {
-            //     edges.Add(new Vector2[] { generator.Vertices[tuple.Item1].Position, generator.Vertices[tuple.Item2].Position } );
-            // }
+            foreach (Vector2[] shape in shapes)
+            {
+                foreach (Vector2 vertex in shape)
+                {
+                    if (vertex.X < minX)
+                    {
+                        minX = vertex.X;
+                    }
+                    if (vertex.X > maxX)
+                    {
+                        maxX = vertex.X;
+                    }
+                    if (vertex.Y < minY)
+                    {
+                        minY = vertex.Y;
+                    }
+                    if (vertex.Y > maxY)
+                    {
+                        maxY = vertex.Y;
+                    }
+                }
+            }
 
-            return result;
+            Vector2[] bounds = new Vector2[]
+            {
+                new Vector2(minX - padding, minY - padding),
+                new Vector2(minX - padding, maxY + padding),
+                new Vector2(maxX + padding, maxY + padding),
+                new Vector2(maxX + padding, minY - padding),
+            };
+
+            return Create(bounds, shapes, agentSize);
         }
     }
 }

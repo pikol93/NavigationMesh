@@ -20,7 +20,7 @@ namespace Pikol93.NavigationMesh
             Cells = new List<int[]>();
 
             InitializeShapes(shapes);
-            CreatePortals();
+            ProcessNotches();
             CreateCells();
         }
 
@@ -30,6 +30,14 @@ namespace Pikol93.NavigationMesh
 
             foreach (int[] cell in Cells)
             {
+#if DEBUG
+                if (cell.Length < 3)
+                {
+                    Console.WriteLine($"Vertex amount for cell: {cell.Length}. Vertices: {String.Join(", ", cell)}");
+                    throw new ApplicationException("Invalid vertex amount.");
+                }
+#endif
+
                 // Find the center of the polygon
                 Vector2[] polygonVertices = new Vector2[cell.Length];
                 for (int i = 0; i < polygonVertices.Length; i++)
@@ -54,7 +62,9 @@ namespace Pikol93.NavigationMesh
             }
 
             if (polygons.Count < 1)
+            {
                 throw new ApplicationException("Not enough polygons created.");
+            }
 
             Vector2[] vertices = new Vector2[Vertices.Count];
             for (int i = 0; i < vertices.Length; i++)
@@ -113,7 +123,10 @@ namespace Pikol93.NavigationMesh
             }
         }
 
-        private void CreatePortals()
+        /// <summary>
+        /// Processes all the notches, in effect filling up the Portals list
+        /// </summary>
+        private void ProcessNotches()
         {
             Queue<int> notches = new Queue<int>();
             foreach (Vertex vertex in Vertices)
@@ -142,8 +155,17 @@ namespace Pikol93.NavigationMesh
                 // Create cells on both sides of the portal
                 Vertex a = Vertices[portal.Item1];
                 Vertex b = Vertices[portal.Item2];
-                AddToCells(GenerateCell(a, b));
-                AddToCells(GenerateCell(b, a));
+                int[] cellA = GenerateCell(a, b);
+                if (cellA != null)
+                {
+                    Cells.Add(cellA);
+                }
+
+                int[] cellB = GenerateCell(b, a);
+                if (cellB != null)
+                {
+                    Cells.Add(cellB);
+                }
             }
 
             if (Cells.Count == 0)
@@ -161,6 +183,7 @@ namespace Pikol93.NavigationMesh
 
         private void ProcessNotch(Vertex notch)
         {
+            // TODO: Clean this up, this is trash
             float minDistance = float.PositiveInfinity;
             object target = null;
             Vector2 position = Vector2.Zero;
@@ -275,7 +298,9 @@ namespace Pikol93.NavigationMesh
             {
                 // This happens when no object can be found within notch's IA
                 // Usually this means that shape is out of bounds
+#if DEBUG
                 throw new ApplicationException("Invalid shape.");
+#endif
             }
         }
 
@@ -283,20 +308,11 @@ namespace Pikol93.NavigationMesh
         {
             Vector2 prev = Vertices[iaVertex.PreviousIndex].Position;
             Vector2 next = Vertices[iaVertex.NextIndex].Position;
-            return point.IsToLeftOfLine(prev, iaVertex.Position) &&
-                point.IsToRightOfLine(next, iaVertex.Position);
 
-            /* The polygons are quaranteed to be clockwise due to polygon inflation
-            bool clockwise = next.IsToRightOfLine(prev, iaVertex.Position);
-
-            if (clockwise)
-            {
-                return point.IsToLeftOfLine(prev, iaVertex.Position) &&
-                    point.IsToRightOfLine(next, iaVertex.Position);
-            }
-            return point.IsToRightOfLine(prev, iaVertex.Position) &&
-                point.IsToLeftOfLine(next, iaVertex.Position);
-            */
+            // Instead of doing IsToLeftOfLine(a, b), I have to do !IsToRightOfLine(a, b)
+            // because sometimes the points are placed exactly on the line in question
+            return !point.IsToRightOfLine(prev, iaVertex.Position) &&
+                !point.IsToLeftOfLine(next, iaVertex.Position);
         }
 
         private bool IsEdgeInIA(Vertex iaVertex, Edge edge, out Vector2 result)
@@ -326,8 +342,7 @@ namespace Pikol93.NavigationMesh
             foreach (Vector2 item in vertexPositions)
             {
                 // Can't use IsPointInIA here due to float precision errors
-                Vector2 intersection = MathExtensions.CastRay(item, iaVertex.Position, pointA, pointB);
-                if (intersection != MathExtensions.Vector2Inf)
+                if (MathExtensions.CastRay(item, iaVertex.Position, pointA, pointB, out Vector2 intersection))
                 {
                     float distance = iaVertex.GetDistanceSquared(intersection);
                     if (distance < minDistance)
@@ -349,22 +364,24 @@ namespace Pikol93.NavigationMesh
             Vector2 portalPoint1 = Vertices[portal.Item1].Position;
             Vector2 portalPoint2 = Vertices[portal.Item2].Position;
 
+            intersection = MathExtensions.Vector2Inf;
+
             // Find if portal lies within IA
-            Vector2 intersectionA = MathExtensions.CastRay(prev, iaVertex.Position, portalPoint1, portalPoint2);
-            Vector2 intersectionB = MathExtensions.CastRay(next, iaVertex.Position, portalPoint1, portalPoint2);
-
-            if (intersectionA != MathExtensions.Vector2Inf || intersectionB != MathExtensions.Vector2Inf)
+            float distanceA = float.PositiveInfinity;
+            if (MathExtensions.CastRay(prev, iaVertex.Position, portalPoint1, portalPoint2, out Vector2 intersectionA))
             {
-                float distanceToIntersectionA = iaVertex.GetDistanceSquared(intersectionA);
-                float distanceToIntersectionB = iaVertex.GetDistanceSquared(intersectionB);
-                intersection = distanceToIntersectionA < distanceToIntersectionB ?
-                    intersectionA : intersectionB;
-
-                return true;
+                distanceA = iaVertex.GetDistanceSquared(intersectionA);
+                intersection = intersectionA;
+            }
+            if (MathExtensions.CastRay(next, iaVertex.Position, portalPoint1, portalPoint2, out Vector2 intersectionB))
+            {
+                if (iaVertex.GetDistanceSquared(intersectionB) < distanceA)
+                {
+                    intersection = intersectionB;
+                }
             }
 
-            intersection = MathExtensions.Vector2Inf;
-            return false;
+            return intersection != MathExtensions.Vector2Inf;
         }
 
         private bool IsVertexConcave(Vertex vertex) =>
@@ -372,106 +389,114 @@ namespace Pikol93.NavigationMesh
 
         private int[] GenerateCell(Vertex first, Vertex second)
         {
-            // Get vertices in a cell
-            List<Vertex> output = new List<Vertex>() { first, second };
-            GetCellRecursive(output);
+            List<Vertex> path = new List<Vertex>() { first, second };
 
-            // Convert the vertices to indexes
-            int[] cell = new int[output.Count];
+            while (true)
+            {
+                if (path.Count == 3)
+                {
+                    // No two cells should have the same 3 indexes in them
+                    // There probably is a better place to put this code...
+                    foreach (int[] item in Cells)
+                    {
+                        if (item.Contains(path[0].Index) && item.Contains(path[1].Index) && item.Contains(path[2].Index))
+                        {
+                            return null;
+                        }
+                    }
+                }
+
+                // Find connected vertices to the last point of path
+                IEnumerable<Vertex> connectedPoints = GetConnectedVertices(path[path.Count - 1]);
+
+                Vertex bestCandidate = null;
+                foreach (Vertex point in connectedPoints)
+                {
+                    // Check if path is found
+                    if (point == first && point != path[path.Count - 2])
+                    {
+                        return VertexPathToCell(path);
+                    }
+
+                    // Check if point has already been processed
+                    // It's iterated backwards because most of the time
+                    // we're dealing with the index of recently processed vertex
+                    bool skip = false;
+                    for (int i = path.Count - 1; i >= 0; i--)
+                    {
+                        if (path[i] == point)
+                        {
+                            skip = true;
+                            break;
+                        }
+                    }
+                    if (skip)
+                    {
+                        continue;
+                    }
+
+                    // Don't ever accept points that could result in a concave shape
+                    if (point.Position.IsToLeftOfLine(path[path.Count - 2].Position, path[path.Count - 1].Position))
+                    {
+                        continue;
+                    }
+
+                    if (bestCandidate == null || point.Position.IsToRightOfLine(path[path.Count - 2].Position, bestCandidate.Position))
+                    {
+                        // New best candidate
+                        bestCandidate = point;
+                    }
+                }
+
+                if (bestCandidate == null)
+                {
+                    break;
+                }
+
+                path.Add(bestCandidate);
+            }
+
+            // Something went wrong
+            return null;
+        }
+
+        private IEnumerable<Vertex> GetConnectedVertices(Vertex vertex)
+        {
+            int index = vertex.Index;
+
+            // Get edge connected vertices
+            yield return Vertices[vertex.PreviousIndex];
+            yield return Vertices[vertex.NextIndex];
+
+            // Get portal connected vertices
+            foreach (Portal portal in Portals)
+            {
+                if (portal.Item1 == index)
+                {
+                    yield return Vertices[portal.Item2];
+                    continue;
+                }
+
+                if (portal.Item2 == index)
+                {
+                    yield return Vertices[portal.Item1];
+                    continue;
+                }
+            }
+        }
+
+        private int[] VertexPathToCell(List<Vertex> path)
+        {
+            int[] cell = new int[path.Count];
             for (int i = 0; i < cell.Length; i++)
             {
-                cell[i] = output[i].Index;
+                cell[i] = path[i].Index;
             }
 
             return cell;
         }
 
-        private void GetCellRecursive(List<Vertex> vertices)
-        {
-            // TODO: This is confusing. Consider remaking this into a while loop
-            Vertex startVertex = vertices[0];
-            Vertex lastIterationVertex = vertices[vertices.Count - 2];
-            Vertex currentIterationVertex = vertices[vertices.Count - 1];
-
-            // Find connected vertices
-            List<int> connectedVertices = new List<int>()
-                { currentIterationVertex.PreviousIndex, currentIterationVertex.NextIndex };
-
-            foreach (Portal portal in Portals)
-            {
-                if (!portal.ContainsIndex(currentIterationVertex.Index))
-                    continue;
-
-                int target = currentIterationVertex.Index == portal.Item1 ? portal.Item2 : portal.Item1;
-                if (target == lastIterationVertex.Index)
-                    continue;
-
-                connectedVertices.Add(target);
-            }
-
-            // Remove vertices that already have been processed
-            for (int i = connectedVertices.Count - 1; i >= 0; i--)
-            {
-                if (connectedVertices[i] == startVertex.Index)
-                    return;
-
-                foreach (Vertex vertex in vertices)
-                {
-                    if (connectedVertices[i] == vertex.Index)
-                    {
-                        connectedVertices.RemoveAt(i);
-                        break;
-                    }
-                }
-            }
-
-            foreach (int index in connectedVertices)
-            {
-                if (index == startVertex.Index)
-                    return;
-            }
-
-            // Call GetCell recursively on the best candidate
-            Vertex bestCandidate = null;
-            double candidateAngle = float.PositiveInfinity;
-
-            foreach (int candidateIndex in connectedVertices)
-            {
-                Vertex candidate = Vertices[candidateIndex];
-                Vector2 a = lastIterationVertex.Position - currentIterationVertex.Position;
-                Vector2 b = candidate.Position - currentIterationVertex.Position;
-                double angle = a.GetCounterClockwiseAngle(b);
-
-                if (angle < candidateAngle)
-                {
-                    bestCandidate = candidate;
-                    candidateAngle = angle;
-                }
-            }
-
-            if (bestCandidate != null)
-            {
-                vertices.Add(bestCandidate);
-                GetCellRecursive(vertices);
-            }
-        }
-
-        private void AddToCells(int[] cell)
-        {
-            foreach (int[] item in Cells)
-            {
-                if (cell.Length != item.Length)
-                    continue;
-
-                // No two cells should have the same 3 indexes in them
-                if (item.Contains(cell[0]) && item.Contains(cell[1]) && item.Contains(cell[2]))
-                    return;
-            }
-
-            Cells.Add(cell);
-        }
-
-        private class Vertex
+        internal class Vertex
         {
             public Vector2 Position { get; }
             public int Index { get; }
@@ -486,10 +511,10 @@ namespace Pikol93.NavigationMesh
             }
 
             public float GetDistanceSquared(Vector2 target) =>
-                Vector2.Distance(Position, target);
+                Vector2.DistanceSquared(Position, target);
         }
 
-        private class Edge : IIntTuple
+        internal class Edge : IIntTuple
         {
             // These properties have to be mutable
             // so I can't use Tuple<int, int> here
@@ -506,7 +531,7 @@ namespace Pikol93.NavigationMesh
                 Item1 == index || Item2 == index;
         }
 
-        private class Portal : Tuple<int, int>, IIntTuple
+        internal class Portal : Tuple<int, int>, IIntTuple
         {
             public Portal(int item1, int item2)
                 : base(item1, item2) { }
@@ -515,7 +540,7 @@ namespace Pikol93.NavigationMesh
                 Item1 == index || Item2 == index;
         }
 
-        private interface IIntTuple
+        internal interface IIntTuple
         {
             int Item1 { get; }
             int Item2 { get; }

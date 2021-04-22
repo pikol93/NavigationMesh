@@ -1,10 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 
 namespace Pikol93.NavigationMesh
 {
     public static class NavMeshFactory
     {
+        // public static List<Vector2[]> portals;
+        // public static List<Vector2[]> edges;
+
         /// <summary>
         /// Tries to create a new NavMesh.
         /// </summary>
@@ -25,7 +29,22 @@ namespace Pikol93.NavigationMesh
             Vector2[][] inflatedPolygons = PolygonInflation.InflatePolygons(bounds, shapes, agentSize);
 
             NavigationMeshGenerator generator = new NavigationMeshGenerator(inflatedPolygons);
-            return generator.GenerateNavMesh();
+
+            var result = generator.GenerateNavMesh();
+
+            // portals = new List<Vector2[]>();
+            // foreach (NavigationMeshGenerator.IIntTuple tuple in generator.Portals)
+            // {
+            //     portals.Add(new Vector2[] { generator.Vertices[tuple.Item1].Position, generator.Vertices[tuple.Item2].Position } );
+            // }
+
+            // edges = new List<Vector2[]>();
+            // foreach (NavigationMeshGenerator.IIntTuple tuple in generator.Edges)
+            // {
+            //     edges.Add(new Vector2[] { generator.Vertices[tuple.Item1].Position, generator.Vertices[tuple.Item2].Position } );
+            // }
+
+            return result;
         }
     }
 }

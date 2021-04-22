@@ -78,10 +78,13 @@ namespace Pikol93.NavigationMesh
         {
             IEnumerable<int> commonVertices = Vertices.Intersect(polygon.Vertices);
 #if DEBUG
-            // commonVertices is a IEnumerable with at least two elements
+            // commonVertices is an IEnumerable with at least two elements
             // it's quaranteed by the process that's responsible for selecting neighbours
-            if (commonVertices.Count() != 2)
+            if (false && commonVertices.Count() != 2)
+            {
+                System.Console.WriteLine($"commonVertices.Count: {commonVertices.Count()}");
                 throw new System.ApplicationException("Invalid `commonVertices` length.");
+            }
 #endif
 
             // Portals have their indexes ordered clockwise, so in case 

@@ -89,8 +89,9 @@ namespace Pikol93.NavigationMesh
         /// <param name="p2">Second point of LineA</param>
         /// <param name="p3">Fist point of LineB</param>
         /// <param name="p4">Second point of LineB</param>
-        /// <returns></returns>
-        public static Vector2 CastRay(Vector2 p1, Vector2 p2, Vector2 p3, Vector2 p4)
+        /// <param name="result">Position of intersection</param>
+        /// <returns>A boolean deciding whether the intersection occured.</returns>
+        public static bool CastRay(Vector2 p1, Vector2 p2, Vector2 p3, Vector2 p4, out Vector2 result)
         {
             float dx12 = p2.X - p1.X;
             float dy12 = p2.Y - p1.Y;
@@ -98,29 +99,33 @@ namespace Pikol93.NavigationMesh
             float dy34 = p4.Y - p3.Y;
 
             float denominator = dy12 * dx34 - dx12 * dy34;
-            float t1 = ((p1.X - p3.X) * dy34 + (p3.Y - p1.Y) * dx34) / denominator;
 
             // Check if the lines are parallel
-            if (float.IsInfinity(t1))
+            if (denominator == 0f)
             {
-                return Vector2Inf;
+                result = Vector2.Zero;
+                return false;
             }
+
+            float t1 = ((p1.X - p3.X) * dy34 + (p3.Y - p1.Y) * dx34) / denominator;
 
             // Don't allow returning point that's on the first line
             if (t1 <= 1f)
             {
-                return Vector2Inf;
+                result = Vector2.Zero;
+                return false;
             }
 
             // t2 is a fraction of second line on which the intersection occurs
             float t2 = ((p3.X - p1.X) * dy12 + (p1.Y - p3.Y) * dx12) / -denominator;
+            result = new Vector2(p3.X + dx34 * t2, p3.Y + dy34 * t2);
             if (t2 <= 0f || t2 >= 1f)
             {
                 // Intersection is outside p3 -> p4
-                return Vector2Inf;
+                return false;
             }
 
-            return new Vector2(p3.X + dx34 * t2, p3.Y + dy34 * t2);
+            return true;
         }
 
         public static float GetIntersectionSecondLineFraction(Vector2 p1, Vector2 p2, Vector2 p3, Vector2 p4)

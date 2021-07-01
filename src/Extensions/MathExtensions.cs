@@ -152,7 +152,9 @@ namespace Pikol93.NavigationMesh
                     {
                         count++;
                         if (count >= requiredElements)
+                        {
                             return true;
+                        }
                     }
                 }
             }

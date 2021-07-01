@@ -145,7 +145,9 @@ namespace Pikol93.NavigationMesh
             foreach (Polygon polygon in Polygons)
             {
                 if (polygon.IsPointInside(Vertices, point))
+                {
                     return polygon;
+                }
             }
 
             return null;
@@ -160,7 +162,9 @@ namespace Pikol93.NavigationMesh
         {
             Polygon findPolygonResult = FindPolygon(point);
             if (findPolygonResult != null)
+            {
                 return findPolygonResult;
+            }
 
             // This is VERY slow, consider using it rarely
             Polygon result = null;
@@ -189,6 +193,11 @@ namespace Pikol93.NavigationMesh
         /// <returns>A string pulled list of Vector2s</returns>
         private static List<Vector2> StringPulling(Vector2 start, Vector2 end, List<Portal> portals)
         {
+            // System.Console.WriteLine($"StringPulling:");
+            // for (int i = 0; i < portals.Count; i++)
+            // {
+            //     System.Console.WriteLine($"\t{i}   {portals[i].Item1} {portals[i].Item2}");
+            // }
             // Portals are constructed so that Item1 of Tuple<Vector2, Vector2>
             // is the "left" edge of the portal, and Item2 is the "right" edge
             if (portals.Count <= 0)
@@ -228,9 +237,19 @@ namespace Pikol93.NavigationMesh
                         // Next left portal point falls out of funnel
                         path.Add(portals[indexRight].Item2);
 
-                        currentIteration = indexRight;
-                        indexLeft = currentIteration + 1;
-                        indexRight = currentIteration + 1;
+                        // Check if either side of the funnel is equal to the apex point
+                        // This can cause errors with calculation the dot product
+                        do
+                        {
+                            currentIteration = indexRight;
+                            indexLeft = currentIteration + 1;
+                            indexRight = currentIteration + 1;
+
+                            if (indexRight >= portals.Count)
+                            {
+                                break;
+                            }
+                        } while (portals[indexRight].Item2 == path[path.Count - 1]);
                         continue;
                     }
                     else
@@ -247,9 +266,17 @@ namespace Pikol93.NavigationMesh
                     {
                         path.Add(portals[indexLeft].Item1);
 
-                        currentIteration = indexLeft;
-                        indexLeft = currentIteration + 1;
-                        indexRight = currentIteration + 1;
+                        do
+                        {
+                            currentIteration = indexLeft;
+                            indexLeft = currentIteration + 1;
+                            indexRight = currentIteration + 1;
+
+                            if (indexLeft >= portals.Count)
+                            {
+                                break;
+                            }
+                        } while (portals[indexLeft].Item1 == path[path.Count - 1]);
                         continue;
                     }
                     else

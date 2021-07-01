@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -38,15 +39,19 @@ namespace Pikol93.NavigationMesh
         {
             // Check if the point lies in range of the radius
             if ((point - Center).LengthSquared() > PolygonRadiusSqr)
+            {
                 return false;
+            }
 
             for (int i = 0; i < Vertices.Length; i++)
             {
                 Vector2 linePointA = vertices[Vertices[i]];
                 Vector2 linePointB = vertices[Vertices[(i + 1) % Vertices.Length]];
 
-                if (!point.IsToLeftOfLine(linePointA, linePointB))
+                if (!point.IsToRightOfLine(linePointA, linePointB))
+                {
                     return false;
+                }
             }
 
             return true;
@@ -80,10 +85,9 @@ namespace Pikol93.NavigationMesh
 #if DEBUG
             // commonVertices is an IEnumerable with at least two elements
             // it's quaranteed by the process that's responsible for selecting neighbours
-            if (false && commonVertices.Count() != 2)
+            if (commonVertices.Count() != 2)
             {
-                System.Console.WriteLine($"commonVertices.Count: {commonVertices.Count()}");
-                throw new System.ApplicationException("Invalid `commonVertices` length.");
+                throw new ApplicationException($"Invalid `commonVertices` length ({commonVertices.Count()}) for cells [{string.Join(", ", Vertices)}] and [{string.Join(", ", polygon.Vertices)}].");
             }
 #endif
 
@@ -93,7 +97,7 @@ namespace Pikol93.NavigationMesh
             {
                 commonVertices = commonVertices.Reverse();
             }
-            return new PortalInt(commonVertices.ElementAt(1), commonVertices.ElementAt(0));
+            return new PortalInt(commonVertices.ElementAt(0), commonVertices.ElementAt(1));
         }
     }
 }

@@ -28,8 +28,7 @@ namespace Pikol93.NavigationMesh
 #if DEBUG
                 if (cell.Length < 3)
                 {
-                    Console.WriteLine($"Vertex amount for cell: {cell.Length}. Vertices: {String.Join(", ", cell)}");
-                    throw new ApplicationException("Invalid vertex amount.");
+                    throw new ApplicationException($"Invalid vertex amount ({cell.Length}) for cell [{String.Join(", ", cell)}].");
                 }
 #endif
 
@@ -129,7 +128,6 @@ namespace Pikol93.NavigationMesh
 
                 ProcessNotch(points[i]);
             }
-
         }
 
         private void CreateCells()
@@ -433,10 +431,11 @@ namespace Pikol93.NavigationMesh
                         continue;
                     }
 
-                    Vector2 lastIteratedVertex = vertices[path[path.Count - 2].Index];
+                    Vector2 preLastIteratedVertex = vertices[path[path.Count - 2].Index];
+                    Vector2 lastIteratedVertex = vertices[path[path.Count - 1].Index];
                     Vector2 vertex = vertices[point.Index];
                     // Don't ever accept points that could result in a concave shape
-                    if (vertex.IsToLeftOfLine(lastIteratedVertex, vertices[path[path.Count - 1].Index]))
+                    if (vertex.IsToLeftOfLine(preLastIteratedVertex, lastIteratedVertex))
                     {
                         continue;
                     }
